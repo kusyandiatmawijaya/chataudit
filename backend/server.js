@@ -19,8 +19,8 @@ if (process.env.DATABASE_URL && process.platform === 'linux') {
     if (fs.existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')) {
       const { execSync } = require('child_process');
       const hostIp = execSync("ip route show default 2>/dev/null | awk '{print $3}'").toString().trim();
-      if (hostIp && (process.env.DATABASE_URL.includes('@localhost:') || process.env.DATABASE_URL.includes('@127.0.0.1:'))) {
-        process.env.DATABASE_URL = process.env.DATABASE_URL.replace(/@(localhost|127\.0\.0\.1):/, `@${hostIp}:`);
+      if (hostIp && (process.env.DATABASE_URL.includes('@localhost:') || process.env.DATABASE_URL.includes('@127.0.0.1:') || /@172\.\d+\.\d+\.\d+:/.test(process.env.DATABASE_URL))) {
+        process.env.DATABASE_URL = process.env.DATABASE_URL.replace(/@(localhost|127\.0\.0\.1|172\.\d+\.\d+\.\d+):/, `@${hostIp}:`);
       }
     }
   } catch (e) {}
@@ -962,9 +962,22 @@ app.get('/api/status', (req, res) => {
   res.json({ running: true, activeClients: (typeof clients !== 'undefined' && clients ? clients.size : 0) });
 });
 
-app.get('/', (req, res) => {
-  res.send('WhatsApp Dashboard Backend is running with Multi-Device support.');
-});
+// Serve frontend production build if available
+const FRONTEND_DIST = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(FRONTEND_DIST)) {
+  app.use(express.static(FRONTEND_DIST));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.send('WhatsApp Dashboard Backend is running with Multi-Device support.');
+  });
+}
 
 const seedDeveloperUser = async () => {
   try {
