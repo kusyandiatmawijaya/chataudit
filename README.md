@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ChatAudit — WhatsApp Audit & Business Intelligence Platform
 
-## Getting Started
+Dashboard manajemen multi-device WhatsApp, real-time monitoring chat, audit analisis berbasis AI (LLM), pelaporan bisnis (*Business Intelligence*), dan sinkronisasi data eksternal yang bersifat universal/general.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 Fitur Utama
+
+- **Multi-Device WhatsApp Management** — Koneksi banyak nomor WhatsApp melalui QR Code (Baileys WebSocket).
+- **Real-time Monitoring & Audit** — Intercept pesan masuk/keluar, filter kontak yang dikecualikan (*Excluded Chats*).
+- **AI Chat Analysis & BI Raport** — Analisis kinerja percakapan dan evaluasi otomatis dengan AI.
+- **Universal External Data Sync (General Sync)**:
+  - Dukungan API manapun (GET/POST) tanpa ketergantungan pada vendor/perusahaan tertentu.
+  - Opsi Autentikasi Fleksibel (*Basic Auth*, *Bearer Token*, *API Key Header*, atau *No Auth*).
+  - Paginasi Dinamis (*Offset-Limit*, *Page Number*, atau *Single Fetch*).
+  - *Dynamic Field Mapping* (JSON pemetaan kolom API eksternal ke entitas internal).
+  - *Inbound Push Webhook* (`POST /api/sync/push/:module`) agar sistem ERP eksternal dapat mengirimkan data secara langsung.
+  - *Dynamic Custom Data Sets* (`CustomDataSet` & `CustomDataRow`) untuk tabel khusus apa saja.
+- **Chatbot & Persona Auto-Reply** — AI Assistant dengan RAG Knowledge Base.
+- **Broadcast & Template Engine** — Pengiriman pesan massal terencana dengan jeda anti-blokir.
+
+---
+
+## 🛠️ Tech Stack & Arsitektur (Opsi A)
+
+```text
+chataudit/
+├── package.json        # Root script: menjalankan backend & frontend bersamaan
+├── backend/            # Express.js v5 + Socket.IO + Baileys + Prisma (PostgreSQL)
+│   ├── server.js
+│   ├── controllers/syncController.js  # General Sync Engine
+│   ├── routes/syncRoutes.js
+│   └── prisma/schema.prisma
+└── frontend/           # React 19 (Vite) + Tailwind CSS + Lucide Icons + Recharts
+    ├── src/pages/SyncPage.jsx
+    └── vite.config.js
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🏁 Cara Menjalankan di Lokal (WSL / Ubuntu)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Masuk ke Direktori Project
+```bash
+cd ~/chataudit
+```
 
-## Learn More
+### 2. Konfigurasi Environment Backend
+Salin file konfigurasi:
+```bash
+cp backend/.env.example backend/.env
+```
+Sesuaikan `DATABASE_URL` (koneksi PostgreSQL Anda) dan `JWT_SECRET`.
 
-To learn more about Next.js, take a look at the following resources:
+### 3. Generate Prisma Client
+```bash
+cd backend
+npx prisma generate
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Jalankan Server Dev (Backend + Frontend Bersamaan)
+Dari root folder `chataudit`:
+```bash
+cd ~/chataudit
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Frontend (UI Dashboard):** [http://localhost:5173](http://localhost:5173)
+- **Backend (API Server):** [http://localhost:3013](http://localhost:3013)

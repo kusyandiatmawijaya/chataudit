@@ -1,0 +1,137 @@
+nohup: ignoring input
+◇ injected env (3) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+Backend server is running on http://localhost:3013
+Starting report scheduler...
+Scheduler started (Reports, Backup, Report Cards).
+Re-initializing session: device-1784119169444
+[Baileys] Session device-1784119169444 initializing using WA v2.3000.1035194821
+[Baileys] Session device-1784119169444 is ready and authenticated!
+GENERATED SQL: SELECT 
+  ac.kdcust,
+  ac.nmcust,
+  ac.kdsls,
+  ac.nmsls,
+  ac.old_cl,
+  ac.newcl,
+  oa.balance
+FROM 
+  analisacreditlimit ac
+  LEFT JOIN outstandingar oa ON ac.kdcust = oa.kdcust
+WHERE 
+  ac.kdcust = ac.kdcust 
+  AND ac.kdsls = ac.kdsls;
+Message saved for session device-1784119169444: 8053
+GENERATED SQL: SELECT nmcust, kdcust 
+FROM analisacreditlimit 
+WHERE nmcust ILIKE '%yogya%' OR kdcust ILIKE '%yogya%';
+GENERATED SQL: SELECT kdcust, nmcust, old_cl, newcl 
+FROM analisacreditlimit 
+WHERE nmcust ILIKE '%Yogya%' 
+ORDER BY newcl DESC 
+LIMIT 10;
+GENERATED SQL: SELECT 
+  ac.kdcust,
+  ac.nmcust,
+  ac.kdsls,
+  ac.nmsls,
+  ac.old_cl,
+  ac.newcl,
+  oa.balance 
+FROM 
+  analisacreditlimit ac 
+  LEFT JOIN outstandingar oa ON ac.kdcust = oa.kdcust 
+WHERE 
+  ac.kdcust ILIKE '%<kdcust>%' 
+  AND ac.kdsls ILIKE '%<kdsls>%' 
+  AND oa.balance > 0;
+GENERATED SQL: SELECT nmcust, kdcust 
+FROM outstandingar 
+WHERE nmcust ILIKE '%yogya%' 
+ORDER BY nmcust 
+LIMIT 10;
+GENERATED SQL: SELECT TOP 10 * 
+FROM outstandingar 
+WHERE nmcust ILIKE '%yogya%' 
+ORDER BY balance DESC;
+First DB Query Error: 
+Invalid `prisma.$queryRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42601`. Message: `ERROR: syntax error at or near "10"`
+Attempting SQL self-correction...
+CORRECTED SQL: SELECT * 
+FROM outstandingar 
+WHERE nmcust ILIKE '%yogya%' 
+ORDER BY balance DESC 
+LIMIT 10;
+GENERATED SQL: SELECT kdcust, nmcust, SUM(balance) AS balance 
+FROM outstandingar 
+WHERE nmcust ILIKE '%yogya%' 
+GROUP BY kdcust, nmcust 
+ORDER BY SUM(balance) DESC 
+LIMIT 10;
+GENERATED SQL: SELECT 
+  ac.kdcust, 
+  ac.nmcust, 
+  ac.kdsls, 
+  ac.nmsls, 
+  ac.old_cl, 
+  ac.newcl, 
+  oa.balance 
+FROM 
+  analisacreditlimit ac 
+  LEFT JOIN outstandingar oa ON ac.kdcust = oa.kdcust 
+WHERE 
+  ac.nmcust ILIKE '%Yogya%' 
+  AND ac.kdcust IN (SELECT kdcust FROM outstandingar GROUP BY kdcust ORDER BY SUM(balance) DESC LIMIT 10);
+Message saved for session device-1784119169444: 8054
+Message saved for session device-1784119169444: 8055
+Message saved for session device-1784119169444: 8056
+Message saved for session device-1784119169444: 8057
+GENERATED SQL: SELECT 
+  a.kdcust, 
+  a.nmcust, 
+  a.kdsls, 
+  a.nmsls, 
+  a.old_cl, 
+  a.newcl, 
+  a.avgtrx, 
+  a.pola_ontime, 
+  a.pola_cicil, 
+  a.ovdontime, 
+  a.ovd3n10, 
+  a.ovd11n18, 
+  a.ovd19n30, 
+  a.ovdmt30, 
+  a.baddebt
+FROM 
+  analisacreditlimit a
+WHERE 
+  a.kdcust = '5782' 
+  AND a.kdsls = 'FBB401';
+Message saved for session device-1784119169444: 8058
+GENERATED SQL: SELECT SUM(balance) AS total_ar, nmcust, kdcust 
+FROM outstandingar 
+WHERE duedate = CURRENT_DATE 
+GROUP BY nmcust, kdcust 
+ORDER BY SUM(balance) DESC 
+LIMIT 5;
+GENERATED SQL: SELECT 
+  SUM(balance) AS total_ar,
+  nmcust,
+  kdcust,
+  SUM(balance) AS ar_toko
+FROM 
+  outstandingar
+WHERE 
+  duedate = CURRENT_DATE
+GROUP BY 
+  nmcust, kdcust
+ORDER BY 
+  ar_toko DESC
+LIMIT 5;
+GENERATED SQL: SELECT nmcust, kdcust, SUM(balance) AS balance 
+FROM outstandingar 
+GROUP BY nmcust, kdcust 
+ORDER BY SUM(balance) DESC 
+LIMIT 10;

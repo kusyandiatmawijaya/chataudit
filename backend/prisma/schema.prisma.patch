@@ -1,0 +1,37 @@
+--- /var/www/audit_wa/backend/prisma/schema.prisma
++++ /var/www/audit_wa/backend/prisma/schema.prisma
+@@ -756,4 +756,32 @@
+   assigner         User     @relation("TaskAssigner", fields: [assignerId], references: [id])
+ 
+   @@map("tasks")
+ }
++
++model OrderableItem {
++  id                      Int      @id @default(autoincrement())
++  product_id              String
++  product_name            String?
++  brand_name              String?
++  category                String?
++  warehouse_location      String?
++  total_available_pcs     Int?
++  unit_1_name             String?
++  unit_1_qty_per_pcs      Int?
++  unit_1_available_stock  Int?
++  unit_1_selling_price    Float?
++  unit_2_name             String?
++  unit_2_qty_per_pcs      Int?
++  unit_2_available_stock  Int?
++  unit_2_selling_price    Float?
++  unit_3_name             String?
++  unit_3_qty_per_pcs      Int?
++  unit_3_available_stock  Int?
++  unit_3_selling_price    Float?
++  unit_4_name             String?
++  unit_4_qty_per_pcs      Int?
++  unit_4_available_stock  Int?
++  unit_4_selling_price    Float?
++  createdAt               DateTime @default(now()) @map("created_at")
++  updatedAt               DateTime @updatedAt @map("updated_at")
++
++  @@map("orderable_items")
++}

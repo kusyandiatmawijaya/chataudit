@@ -1,0 +1,958 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                 String              @id @default(uuid())
+  sessionId          String              @unique @map("session_id")
+  name               String
+  status             String              @default("disconnected")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  messages           Message[]
+  reportSchedules    ReportSchedule[]
+  reportCards        ReportCard[]
+  users              User[]              @relation("UserSessions")
+  excludedChats      ExcludedChat[]
+  paymentExtractions PaymentExtraction[]
+  broadcasts         Broadcast[]
+
+  @@map("sessions")
+}
+
+model Message {
+  id                 Int                 @id @default(autoincrement())
+  sessionId          String              @map("session_id")
+  sender             String
+  receiver           String
+  chatName           String?             @map("chat_name")
+  messageBody        String              @map("message_body")
+  isFromMe           Boolean             @map("is_from_me")
+  mediaUrl           String?             @map("media_url")
+  mediaType          String?             @map("media_type")
+  authorId           String?             @map("author_id")
+  authorName         String?             @map("author_name")
+  isStatus           Boolean             @default(false) @map("is_status")
+  timestamp          DateTime            @default(now())
+  createdAt          DateTime            @default(now()) @map("created_at")
+  session            Session             @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  paymentExtractions PaymentExtraction[]
+
+  @@map("messages")
+}
+
+model User {
+  id              String           @id @default(uuid())
+  username        String           @unique
+  password        String
+  role            Role             @default(USER)
+  profilePic      String?          @map("profile_pic")
+  whatsappId      String?          @map("whatsapp_id")
+  phoneNumber     String?          @map("phone_number")
+  telegramId      String?          @map("telegram_id")
+  email           String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  reportSchedules ReportSchedule[]
+  backupSchedules BackupSchedule[]
+  sessions        Session[]        @relation("UserSessions")
+  issues          Issue[]          @relation("UserIssues")
+  assignedTasks   Task[]           @relation("TaskPic")
+  createdTasks    Task[]           @relation("TaskAssigner")
+
+  @@map("users")
+}
+
+model ReportSchedule {
+  id             String   @id @default(uuid())
+  prompt         String
+  period         String?
+  sessionId      String?  @map("session_id")
+  senderSessionId String? @map("sender_session_id")
+  exportFormat   String   @default("pdf")
+  targetWaNumber String   @map("target_wa_number")
+  targetEmail    String?  @map("target_email")
+  scheduleTime   String   @map("schedule_time")
+  isActive       Boolean  @default(true) @map("is_active")
+  scope          String   @default("device")
+  targetChat     String?  @map("target_chat")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdBy      String   @map("created_by")
+  name           String   @default("Laporan AI")
+  user           User     @relation(fields: [createdBy], references: [id])
+  session        Session? @relation(fields: [sessionId], references: [sessionId], onDelete: SetNull)
+
+  @@map("report_schedules")
+}
+
+enum Role {
+  DEVELOPER
+  ADMINISTRATOR
+  USER
+}
+
+model ExcludedChat {
+  id        String   @id @default(uuid())
+  sessionId String?  @map("session_id")
+  chatId    String   @map("chat_id")
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  session   Session? @relation(fields: [sessionId], references: [sessionId], onDelete: SetNull)
+
+  @@unique([sessionId, chatId])
+  @@map("excluded_chats")
+}
+
+model Dictionary {
+  id         String   @id @default(uuid())
+  term       String   @unique
+  definition String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("dictionaries")
+}
+
+model BackupSchedule {
+  id            String    @id @default(uuid())
+  frequency     String    @default("daily") // daily, weekly, monthly
+  backupTime    String    @map("backup_time") // HH:mm format (WIB)
+  retentionDays Int       @default(30) @map("retention_days")
+  isActive      Boolean   @default(true) @map("is_active")
+  lastRunAt     DateTime? @map("last_run_at")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  user          User      @relation(fields: [createdBy], references: [id])
+
+  @@map("backup_schedules")
+}
+
+model BackupLog {
+  id           String   @id @default(uuid())
+  filename     String
+  fileSize     BigInt   @default(0) @map("file_size")
+  status       String   @default("success") // success, failed
+  type         String   @default("manual") // scheduled, manual, pre_writeoff
+  errorMessage String?  @map("error_message")
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("backup_logs")
+}
+
+model ReportCard {
+  id            String    @id @default(uuid())
+  sessionId     String    @map("session_id")
+  type          String    @default("daily") // "daily" | "weekly"
+  scope         String    @default("device") // "device" | "chat"
+  contactNumber String?   @map("contact_number") // For per-chat scope
+  contactName   String?   @map("contact_name") // Display name for per-chat
+  date          DateTime // Date of the report (WIB)
+  weekStart     DateTime? @map("week_start")
+  weekEnd       DateTime? @map("week_end")
+
+  overallGrade String @map("overall_grade") // A, A-, B+, B, B-, C+, C, C-, D, F
+  overallScore Int    @map("overall_score") // 0-100
+
+  scores       String // JSON: [{category, grade, score, description}]
+  summary      String // Executive summary (Markdown)
+  highlights   String? // Key highlights (Markdown)
+  redFlags     String? @map("red_flags") // Anomalies & risks (Markdown)
+  redFlagCount Int     @default(0) @map("red_flag_count")
+
+  gallery String? // JSON: [{mediaUrl, caption, relatedSection}]
+
+  totalMessages   Int @default(0) @map("total_messages")
+  totalChats      Int @default(0) @map("total_chats")
+  totalMediaFiles Int @default(0) @map("total_media_files")
+
+  pdfUrl String? @map("pdf_url")
+
+  generatedAt DateTime @default(now()) @map("generated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  session Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@unique([sessionId, type, scope, date, contactNumber])
+  @@map("report_cards")
+}
+
+model PaymentExtraction {
+  id              String   @id @default(uuid())
+  sessionId       String?  @map("session_id")
+  messageId       Int?     @map("message_id")
+  pengirimPesan   String?  @map("pengirim_pesan")
+  bankSumber      String?  @map("bank_sumber")
+  tanggalTransfer String?  @map("tanggal_transfer")
+  jenisTransaksi  String?  @map("jenis_transaksi")
+  rekeningTujuan  String?  @map("rekening_tujuan")
+  nominalTransfer Float?   @map("nominal_transfer")
+  beritaPesan     String?  @map("berita_pesan")
+  noReferensi     String?  @map("no_referensi")
+  status          String?
+  rawJson         String?  @map("raw_json")
+  imageHash       String?  @map("image_hash")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  session Session? @relation(fields: [sessionId], references: [sessionId], onDelete: SetNull)
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@map("payment_extractions")
+}
+
+model OutstandingAr {
+  id        Int       @id @default(autoincrement())
+  tglpfi    DateTime?
+  nopfi     String    @unique
+  kdsls     String?
+  nmsls     String?
+  kdcust    String?
+  nmcust    String?
+  amount    Float?
+  paid      Float?
+  balance   Float?
+  pdc       String?
+  topid     Int?
+  duedate   DateTime?
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("outstandingar")
+}
+
+model Customer {
+  id           Int       @id @default(autoincrement())
+  kdcust       String    @unique
+  nmcust       String?
+  alamat       String?
+  kontak       String?
+  phone        String?
+  status       String?
+  first_sales  DateTime?
+  npwp         String?
+  tax_name     String?
+  tax_address  String?
+  nik          String?
+  latitude     Float?
+  longitude    Float?
+  customFields Json?     @map("custom_fields")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
+model SyncSetting {
+  id             String    @id @default(uuid())
+  module         String    @unique // e.g., "customers", "outstandingar", "daftarhargabarang", or custom dataset
+  moduleName     String    @map("module_name") // e.g., "Master Customer", "Outstanding AR"
+  endpoint       String
+  httpMethod     String    @default("GET") @map("http_method") // "GET", "POST"
+  authType       String    @default("NONE") @map("auth_type") // "NONE", "BASIC", "BEARER", "API_KEY"
+  authUsername   String?   @map("auth_username")
+  authPassword   String?   @map("auth_password")
+  authToken      String?   @map("auth_token")
+  apiKeyHeader   String?   @map("api_key_header") // e.g. "X-API-Key"
+  customHeaders  Json?     @map("custom_headers") // JSON object of custom headers
+  paginationType String    @default("OFFSET_LIMIT") @map("pagination_type") // "NONE", "OFFSET_LIMIT", "PAGE_NUMBER"
+  dataPath       String?   @map("data_path") // JSON path to items array, e.g. "items" or "data"
+  fieldMapping   Json?     @map("field_mapping") // JSON mapping from API fields to DB fields
+  scheduleType   String    @default("manual") // "manual", "hourly", "daily", etc.
+  syncType       String    @default("replace") // "replace", "upsert", "push"
+  isActive       Boolean   @default(true) @map("is_active")
+  lastSyncAt     DateTime? @map("last_sync_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("sync_settings")
+}
+
+model SyncLog {
+  id           String   @id @default(uuid())
+  module       String
+  method       String // "AUTOMATIC", "MANUAL"
+  status       String // "SUCCESS", "FAILED", "IN_PROGRESS"
+  syncedRows   Int      @default(0) @map("synced_rows")
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("sync_logs")
+}
+
+model AnalisaCreditLimit {
+  id               Int       @id @default(autoincrement())
+  kunci            String    @unique
+  kdcust           String?
+  nmcust           String?
+  kdsls            String?
+  nmsls            String?
+  old_cl           Float?
+  newcl            Float?
+  avgtrx           Float?
+  oi               Int?
+  pola_ontime      String?
+  pola_cicil       String?
+  kategori_ovd     String?
+  kriteria_applied String?
+  status_toko      String?
+  channel          String?
+  jumpfi           Int?
+  bayar1x          Int?
+  bayar2x          Int?
+  bayar3x          Int?
+  bayar4x          Int?
+  ovdontime        Int?
+  ovd3n10          Int?
+  ovd11n18         Int?
+  ovd19n30         Int?
+  ovdmt30          Int?
+  blmbayar         Int?
+  baddebt          Int?
+  old_top          Int?
+  new_top          String?
+  colovd           String?
+  lasttrx          DateTime?
+  pola             String?
+  trgec            Int?
+  status           String?
+  outlet_type      String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("analisacreditlimit")
+}
+
+model PromptTemplate {
+  id           Int      @id @default(autoincrement())
+  category     String
+  title        String
+  type         String // 'TEXT' or 'FORM'
+  formFields   Json? // e.g. [{ name: 'kodeSales', label: 'Kode Sales', type: 'text' }]
+  templateText String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("prompt_templates")
+}
+
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model ListAIModel {
+  id            Int      @id @default(autoincrement())
+  modelId       String   @unique @map("model_id")
+  name          String
+  badge         String?
+  isFree        Boolean  @default(false) @map("is_free")
+  contextLength Int?     @map("context_length")
+  isActive      Boolean  @default(false) @map("is_active")
+  isAvailable   Boolean  @default(true)
+  isMultimodal  Boolean  @default(false) @map("is_multimodal")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("list_ai_models")
+}
+
+model Template {
+  id         String      @id @default(uuid())
+  name       String
+  type       String // 'TEXT', 'STATIC_MEDIA', 'DYNAMIC_MEDIA'
+  header     String?
+  body       String
+  footer     String?
+  mediaUrl   String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  broadcasts Broadcast[]
+
+  @@map("templates")
+}
+
+model Broadcast {
+  id          String    @id @default(uuid())
+  name        String
+  templateId  String    @map("template_id")
+  sessionId   String    @map("session_id")
+  status      String    @default("PENDING") // 'PENDING', 'RUNNING', 'COMPLETED', 'FAILED'
+  scheduledAt DateTime? @map("scheduled_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  template   Template             @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  session    Session              @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  recipients BroadcastRecipient[]
+
+  @@map("broadcasts")
+}
+
+model BroadcastRecipient {
+  id             String    @id @default(uuid())
+  broadcastId    String    @map("broadcast_id")
+  phoneNumber    String    @map("phone_number")
+  variables      String? // JSON string for variables
+  mediaUrl       String?   @map("media_url")
+  status         String    @default("PENDING") // 'PENDING', 'SENT', 'FAILED'
+  errorReason    String?   @map("error_reason")
+  messageId      String?   @unique @map("message_id")
+  deliveryStatus String?   @default("PENDING") @map("delivery_status")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@map("broadcast_recipients")
+}
+
+model ChatbotWhitelist {
+  id          String   @id @default(uuid())
+  phoneNumber String   @map("phone_number")
+  name        String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([phoneNumber])
+  @@map("chatbot_whitelist")
+}
+
+model Persona {
+  id           String    @id @default(uuid())
+  name         String    @unique
+  systemPrompt String    @db.Text
+  toolAccess   String    @default("EXTERNAL") @map("tool_access")
+  contacts     Contact[]
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("personas")
+}
+
+model Contact {
+  id              String    @id @default(uuid())
+  whatsappId      String    @unique @map("whatsapp_id")
+  telegramId      String?   @unique @map("telegram_id")
+  phoneNumber     String    @map("phone_number")
+  realPhoneNumber String?   @map("real_phone_number")
+  name            String
+  group           String?
+  isAllowed       Boolean   @default(false) @map("is_allowed")
+  personaId       String?   @map("persona_id")
+  kodeCustomer    String?   @map("kode_customer")
+  kodeSales       String?   @map("kode_sales")
+  kodeGudang      String?   @map("kode_gudang")
+  atasan          String?
+  botStatus       String    @default("BOT_ACTIVE") @map("bot_status")
+  notes           String?   @db.Text
+  strikeCount     Int       @default(0) @map("strike_count")
+  ignoredUntil    DateTime? @map("ignored_until")
+  persona         Persona?  @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("contacts")
+}
+
+model ProductKnowledge {
+  id        String   @id @default(uuid())
+  title     String
+  fileType  String   @map("file_type")
+  content   String   @db.Text
+  mediaUrl  String?  @map("media_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("product_knowledge")
+}
+
+model BIReportCard {
+  id          String   @id @default(uuid())
+  type        String   @default("daily") // "daily" | "weekly" | "monthly"
+  scope       String   @default("all") // "all" | "salesman" | "customer"
+  scopeFilter String?  @map("scope_filter") // kdsls/kdcust value for filtered scope
+  scopeName   String?  @map("scope_name") // nmsls/nmcust for display
+  date        DateTime // Date of the report
+
+  overallGrade String @map("overall_grade") // A, A-, B+, B, B-, C+, C, C-, D, F
+  overallScore Int    @map("overall_score") // 0-100
+
+  scores       String // JSON: [{category, grade, score, description}]
+  summary      String // Executive summary (Markdown)
+  highlights   String? // Key highlights (Markdown)
+  redFlags     String? @map("red_flags") // Anomalies & risks (Markdown)
+  redFlagCount Int     @default(0) @map("red_flag_count")
+
+  // BI-specific stats
+  totalAR        Float @default(0) @map("total_ar")
+  totalPaid      Float @default(0) @map("total_paid")
+  totalBalance   Float @default(0) @map("total_balance")
+  totalCustomers Int   @default(0) @map("total_customers")
+  totalInvoices  Int   @default(0) @map("total_invoices")
+  overdueCount   Int   @default(0) @map("overdue_count")
+
+  pdfUrl String? @map("pdf_url")
+
+  generatedAt DateTime @default(now()) @map("generated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([type, scope, date, scopeFilter])
+  @@map("bi_report_cards")
+}
+
+model DaftarHargaBarang {
+  id              Int      @id @default(autoincrement())
+  kdbrg           String   @unique
+  nmbrg           String?
+  pack_size       String?
+  composite_desc  String?
+  kdprinsip       String?
+  principal_name1 String?
+  nmsup           String?
+  kpc1            Int?
+  kpc2            Int?
+  kpc3            Int?
+  kpc4            Int?
+  konversi1       Int?
+  konversi2       Int?
+  konversi3       Int?
+  konversi4       Int?
+  qtypcs          Int?
+  uom1            String?
+  uom2            String?
+  uom3            String?
+  uom4            String?
+  lev             String?
+  nmkat           String?
+  nmsubkat        String?
+  brand           String?
+  tags            String?
+  rbp1            Float?
+  rbp2            Float?
+  rbp3            Float?
+  rbp4            Float?
+  harga1          Float?
+  harga2          Float?
+  harga3          Float?
+  harga4          Float?
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("daftarhargabarang")
+}
+
+model CustomDataSet {
+  id          String          @id @default(uuid())
+  slug        String          @unique // unique identifier, e.g. "delivery_logs"
+  name        String          // Display name
+  description String?
+  schemaJson  Json?           @map("schema_json") // Optional field definitions
+  rows        CustomDataRow[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@map("custom_data_sets")
+}
+
+model CustomDataRow {
+  id        String        @id @default(uuid())
+  datasetId String        @map("dataset_id")
+  rowKey    String?       @map("row_key") // e.g. customer code, order id
+  data      Json          // Arbitrary data payload
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  dataset   CustomDataSet @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId])
+  @@index([datasetId, rowKey])
+  @@map("custom_data_rows")
+}
+
+model Promo {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  keywords    String
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  imageUrl    String   @map("image_url")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("promos")
+}
+
+model TelegramBot {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  name      String?
+  type      String   @default("MAIN") // "MAIN", "SOPIR", "SALESMAN"
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("telegram_bots")
+}
+
+model Dashboard {
+  id          String   @id @default(uuid())
+  name        String // e.g., "Sales Performance", "Collection Dashboard"
+  description String?
+  isDefault   Boolean  @default(false)
+  widgets     Widget[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("dashboards")
+}
+
+model Widget {
+  id          String @id @default(uuid())
+  dashboardId String
+  title       String
+  type        String // "KPI", "LINE_CHART", "BAR_CHART", "GEOMAP", "DATA_TABLE"
+  dataSource  String // The identifier for the data endpoint (e.g., "SALES_COLLECTION_SUMMARY")
+  configJson  Json // Stores specific settings (e.g., metrics to show, colors, target values)
+  layoutJson  Json // Stores grid positions (x, y, w, h for react-grid-layout)
+
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@map("widgets")
+}
+
+model DataSource {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  description   String?
+  query         String   @db.Text
+  widgetTypes   String // e.g. "[\"KPI\",\"LINE_CHART\",\"BAR_CHART\",\"DATA_TABLE\",\"GEOMAP\",\"DONUT_CHART\",\"AREA_CHART\"]"
+  dynamicParams String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("data_sources")
+}
+
+model RasioPiutangPerSales {
+  id              Int      @id @default(autoincrement())
+  tahun           Int?
+  bulan           Int?
+  periode         String?
+  jumlah_invoice  Int?
+  jumlah_customer Int?
+  kode_sales      String?
+  nama_sales      String?
+  divisi          String?
+  jumlah_piutang  Float?
+  jumlah_bayar    Float?
+  jumlah_sisa     Float?
+  rasio           Float?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("rasiopiutangpersales")
+}
+
+model Issue {
+  id               String   @id @default(uuid())
+  sourceModule     String   // e.g., "BUSINESS_ANALYST", "WA_CHAT_ANALYSIS"
+  title            String
+  queryParameters  Json     // The filters used (e.g., { division: 'Forisa', area: 'Depok' })
+  initialSnapshot  Json     // The raw data/result at the time of creation
+  aiSummary        String?  // The initial narrative from AI
+  createdBy        String   // User ID
+  createdAt        DateTime @default(now())
+  tasks            Task[]
+
+  user             User     @relation("UserIssues", fields: [createdBy], references: [id])
+
+  @@map("issues")
+}
+
+model Task {
+  id               String   @id @default(uuid())
+  issueId          String
+  picId            String   // Assignee User ID
+  assignerId       String   // Assigner User ID
+  deadline         DateTime
+  status           String   @default("OPEN") // OPEN, SOLVE_AND_CLOSE, OPEN_CONTINUE, OPEN_CLOSE
+  isAcknowledged   Boolean  @default(false) @map("is_acknowledged")
+  picNotes         String?  @db.Text @map("pic_notes")
+  currentSnapshot  Json?    // The latest pulled data for comparison
+  aiProgressReport String?  // AI's analysis comparing initial vs current
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  issue            Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  pic              User     @relation("TaskPic", fields: [picId], references: [id])
+  assigner         User     @relation("TaskAssigner", fields: [assignerId], references: [id])
+
+  @@map("tasks")
+}
+
+model OrderableItem {
+  id                      Int      @id @default(autoincrement())
+  product_id              String
+  product_name            String?
+  brand_name              String?
+  category                String?
+  warehouse_location      String?
+  total_available_pcs     Int?
+  unit_1_name             String?
+  unit_1_qty_per_pcs      Int?
+  unit_1_available_stock  Int?
+  unit_1_selling_price    Float?
+  unit_2_name             String?
+  unit_2_qty_per_pcs      Int?
+  unit_2_available_stock  Int?
+  unit_2_selling_price    Float?
+  unit_3_name             String?
+  unit_3_qty_per_pcs      Int?
+  unit_3_available_stock  Int?
+  unit_3_selling_price    Float?
+  unit_4_name             String?
+  unit_4_qty_per_pcs      Int?
+  unit_4_available_stock  Int?
+  unit_4_selling_price    Float?
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("orderable_items")
+}
+
+// Temporary cart for ongoing conversation
+model Cart {
+  id          String   @id @default(uuid())
+  contactId   String   @unique
+  items       Json     // Array of { productId, qty, unit, unitPrice, subtotal }
+  totalAmount Float    @default(0)
+  updatedAt   DateTime @updatedAt
+}
+
+model SalesOrder {
+  id            String            @id @default(uuid())
+  so_number     String            @unique @map("so_number")
+  kdcust        String            @map("kdcust")
+  kdsls         String?           @map("kdsls")
+  contactId     String?           @map("contact_id")
+  order_date    DateTime          @default(now()) @map("order_date")
+  total_amount  Float             @map("total_amount")
+  status        String            @default("PENDING") // PENDING, PROCESSED, CANCELLED
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  items         SalesOrderItem[]
+
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id            String      @id @default(uuid())
+  so_id         String      @map("so_id")
+  product_id    String      @map("product_id")
+  product_name  String?     @map("product_name")
+  qty           Int
+  unit          String?
+  unit_price    Float       @map("unit_price")
+  subtotal      Float
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  salesOrder    SalesOrder  @relation(fields: [so_id], references: [id], onDelete: Cascade)
+
+  @@map("sales_order_items")
+}
+
+model ReturnTransaction {
+  id              String   @id @default(uuid())
+  returnNumber    String?  @unique @map("return_number")
+  divisi          String?
+  source          String?  @default("TELEGRAM_CHAT") // "TELEGRAM_CHAT" | "MINI_APP"
+  telegramUserId  String?  @map("telegram_user_id")
+  contactName     String?  @map("contact_name")
+  customerCode    String?  @map("customer_code")
+  customerName    String?  @map("customer_name")
+  isCustomerValid Boolean  @default(false) @map("is_customer_valid")
+  returnType      String   @map("return_type") // "TUNAI" or "KREDIT"
+  latitude        Float?
+  longitude       Float?
+  locationAddress String?  @map("location_address") @db.Text
+  photoUrl        String?  @map("photo_url")
+  isPrinted       Boolean  @default(false) @map("is_printed")
+  isDetailPrinted Boolean  @default(false) @map("is_detail_printed")
+  isSynced        Boolean  @default(false) @map("is_synced")
+  status          String   @default("DRAFT") @map("status")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  invoiceNumber   String?  @map("invoice_number")
+  salespersonCode String?  @map("salesperson_code")
+  salespersonName String?  @map("salesperson_name")
+  originLatitude        Float?   @map("origin_latitude")
+  originLongitude       Float?   @map("origin_longitude")
+  distanceDiff          Float?   @map("distance_diff")
+  driverLatitude        Float?   @map("driver_latitude")
+  driverLongitude       Float?   @map("driver_longitude")
+  driverLocationAddress String?  @map("driver_location_address") @db.Text
+  driverDistanceDiff    Float?   @map("driver_distance_diff")
+  driverPhotoUrl        String?  @map("driver_photo_url")
+  deletedAt             DateTime? @map("deleted_at")
+
+  items           ReturnItem[]
+  histories       ReturnHistory[]
+
+  @@map("return_transactions")
+}
+
+model ReturnItem {
+  id                    String            @id @default(uuid())
+  returnTransactionId   String            @map("return_transaction_id")
+  returnTransaction     ReturnTransaction @relation(fields: [returnTransactionId], references: [id], onDelete: Cascade)
+
+  productCode   String?  @map("product_code")
+  productName   String?  @map("product_name")
+  uom           String?  // nilai UOM terpilih, e.g. "KRT", "LSN", "PCS"
+  konversi      Int?     // konversi yang sesuai dengan UOM terpilih
+  price         Float?   @map("price")
+  totalPrice    Float?   @map("total_price")
+  qty           Float?   @default(0)
+  qtyGood       Float?   @map("qty_good")
+  qtyBad        Float?   @map("qty_bad")
+  originalQty   Float?   @map("original_qty")
+  alasan        String?  @db.Text
+  createdByGroup String? @map("created_by_group") // e.g., "SOPIR" or "GUDANG"
+  deletedAt     DateTime? @map("deleted_at")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("return_items")
+}
+
+model PrintJob {
+  id          String   @id @default(uuid())
+  copies       Int      @default(1)
+  base64_data  String?  @db.Text
+  file_url     String?
+  printer_name String?
+  status       String   @default("PENDING") // PENDING, PRINTED, FAILED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("print_jobs")
+}
+
+model DailyDelivery {
+  id                 Int       @id @default(autoincrement())
+  delivery_number    String?   @map("delivery_number")
+  delivery_date      DateTime? @map("delivery_date")
+  invoice_number     String?   @map("invoice_number")
+  customer_code      String?   @map("customer_code")
+  customer_name      String?   @map("customer_name")
+  salesperson_code   String?   @map("salesperson_code")
+  salesperson_name   String?   @map("salesperson_name")
+  warehouse_code     String?   @map("warehouse_code")
+  latitude           Float?    @map("latitude")
+  longitude          Float?    @map("longitude")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("daily_deliveries")
+}
+
+model GeneralReportSchedule {
+  id              String   @id @default(uuid())
+  name            String   @unique // e.g., "Salesman Monthly Report"
+  reportId        String   @unique // e.g., "salesman_monthly"
+  scheduleTime    String   @map("schedule_time") // e.g., "07:00"
+  isActive        Boolean  @default(true) @map("is_active")
+  senderSessionId String?  @map("sender_session_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("general_report_schedules")
+}
+
+model SalesCoverage {
+  id                       Int      @id @default(autoincrement())
+  salesman_code            String?  @map("salesman_code")
+  salesman_name            String?  @map("salesman_name")
+  customer_code            String?  @map("customer_code")
+  customer_name            String?  @map("customer_name")
+  full_store_address       String?  @map("full_store_address")
+  visit_day                String?  @map("visit_day")
+  visit_frequency          String?  @map("visit_frequency")
+  store_operational_status String?  @map("store_operational_status")
+  customer_phone           String?  @map("customer_phone")
+  latitude                 Float?   @map("latitude")
+  longitude                Float?   @map("longitude")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_coverages")
+}
+
+model ReturnHistory {
+  id                  String            @id @default(uuid())
+  returnTransactionId String            @map("return_transaction_id")
+  returnTransaction   ReturnTransaction @relation(fields: [returnTransactionId], references: [id], onDelete: Cascade)
+  action              String   // e.g., 'CREATED', 'SPV_APPROVED', 'DRIVER_PROCESSED'
+  actorRole           String?  @map("actor_role") // 'Salesman', 'Supervisor Sales', 'Driver/Kenek', 'Admin Gudang'
+  actorName           String?  @map("actor_name")
+  actorId             String?  @map("actor_id")
+  changes             Json?    // Stores detailed changes made in this step
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@map("return_history")
+}
+
+model SaleableItem {
+  id                    Int       @id @default(autoincrement())
+  product_code          String?   @map("product_code")
+  product_name          String?   @map("product_name")
+  packaging_description String?   @map("packaging_description")
+  principal_code        String?   @map("principal_code")
+  principal_name        String?   @map("principal_name")
+  brand_code            String?   @map("brand_code")
+  brand_name            String?   @map("brand_name")
+  salesman_code         String?   @map("salesman_code")
+  salesman_name         String?   @map("salesman_name")
+  price_tier_1          Float?    @map("price_tier_1")
+  price_tier_2          Float?    @map("price_tier_2")
+  price_tier_3          Float?    @map("price_tier_3")
+  price_tier_4          Float?    @map("price_tier_4")
+  price_tier_5          Float?    @map("price_tier_5")
+  conversion_factor_1   Float?    @map("conversion_factor_1")
+  conversion_factor_2   Float?    @map("conversion_factor_2")
+  conversion_factor_3   Float?    @map("conversion_factor_3")
+  unit_of_measure_1     String?   @map("unit_of_measure_1")
+  unit_of_measure_2     String?   @map("unit_of_measure_2")
+  unit_of_measure_3     String?   @map("unit_of_measure_3")
+  pricing_level         String?   @map("pricing_level")
+  product_barcode       String?   @map("product_barcode")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([product_code])
+  @@index([salesman_code])
+  @@index([salesman_name])
+  @@index([principal_code])
+  @@index([brand_code])
+  @@map("saleable_items")
+}

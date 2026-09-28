@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Form Retur Barang</title>
+  <meta name="description" content="Form input retur barang via Telegram Mini App" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=12" />
+</head>
+<body>
+  <!-- Loading screen -->
+  <div id="screen-loading" class="screen active">
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p class="loading-text">Memuat Form Retur...</p>
+    </div>
+  </div>
+
+  <!-- Error screen -->
+  <div id="screen-error" class="screen">
+    <div class="error-container">
+      <div class="error-icon">⚠️</div>
+      <h2>Terjadi Kesalahan</h2>
+      <p id="error-message">Gagal memuat aplikasi.</p>
+      <button class="btn btn-primary" onclick="window.location.reload()">Coba Lagi</button>
+    </div>
+  </div>
+
+  <!-- List Screen -->
+  <div id="screen-list" class="screen">
+    <div class="card">
+      <div class="card-header" style="justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="card-icon" style="margin-right: 0;">📋</span>
+          <h2 style="margin: 0; font-size: 15px;">Daftar Retur</h2>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <button type="button" class="theme-toggle-btn" title="Ubah Tema"><span class="theme-icon">🌙</span></button>
+          <button id="btn-create-return" class="btn btn-primary" style="padding: 4px 12px; font-size: 13px; min-height: 28px; height: auto;">＋ Buat Retur</button>
+          <div style="display: inline-flex; align-items: center; gap: 4px;">
+            <input type="date" id="filter-date" class="form-input" style="width: auto; padding: 4px 8px; font-size: 12px; min-height: 28px; height: auto;" title="Filter Tanggal (kosongkan untuk semua tanggal)" />
+            <button type="button" id="btn-date-all" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px; min-height: 28px; height: 28px; white-space: nowrap;" title="Tampilkan semua tanggal">Semua Tgl</button>
+          </div>
+          <span id="user-role-badge" class="badge-user-role" style="display: none;" title="Role Pengguna">👤 Memuat...</span>
+          <select id="role-simulator" class="form-input" style="display: none; width: auto; padding: 4px 8px; font-size: 12px; min-height: 28px; height: auto;" title="Simulator Role (Dev Mode)">
+            <option value="Salesman">Role: Salesman</option>
+            <option value="Supervisor Sales">Role: SPV</option>
+            <option value="Driver/Kenek">Role: Driver</option>
+            <option value="Admin Gudang">Role: Gudang</option>
+          </select>
+          <select id="filter-status" class="form-input" style="width: auto; padding: 4px 8px; font-size: 12px; min-height: 28px; height: auto;">
+            <option value="ALL" selected>Status: Semua</option>
+            <option value="SPV_APPROVED">Status: Disetujui SPV</option>
+            <option value="DRIVER_PROCESSED">Status: Sudah Ditarik Driver</option>
+            <option value="SUBMITTED">Status: Menunggu SPV</option>
+            <option value="SPV_REJECTED">Status: Ditolak SPV</option>
+            <option value="SELESAI">Status: Selesai</option>
+          </select>
+          <select id="filter-print" class="form-input" style="width: auto; padding: 4px 8px; font-size: 12px; min-height: 28px; height: auto;">
+            <option value="ALL">Print: Semua</option>
+            <option value="BELUM_DICETAK" selected>Print: Belum</option>
+            <option value="SUDAH_DICETAK">Print: Sudah</option>
+          </select>
+        </div>
+      </div>
+      <div id="returns-list-container" class="returns-list-container">
+        <!-- populated by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="screen-app" class="screen">
+
+    <!-- Progress Bar -->
+    <div class="progress-header">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;">
+        <div class="progress-bar-track" style="flex: 1; margin-bottom: 0;">
+          <div id="progress-bar" class="progress-bar-fill"></div>
+        </div>
+        <button type="button" class="theme-toggle-btn" title="Ubah Tema"><span class="theme-icon">🌙</span></button>
+      </div>
+      <div class="step-labels">
+        <span class="step-label active" data-step="1">Faktur</span>
+        <span class="step-label" data-step="2">Barang</span>
+        <span class="step-label" data-step="3">Foto & Lokasi</span>
+        <span class="step-label" data-step="4">Review</span>
+      </div>
+    </div>
+
+    <!-- ===== STEP 1: Konfirmasi Faktur & Tipe Retur ===== -->
+    <div id="step-1" class="step-panel active">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🧾</span>
+          <h2>Konfirmasi Faktur</h2>
+          <button type="button" class="theme-toggle-btn" title="Ubah Tema"><span class="theme-icon">🌙</span></button>
+        </div>
+        
+        <div class="info-grid">
+          <div class="form-group" style="margin-bottom:10px;">
+            <label class="form-label">Kode Sales</label>
+            <select id="s1-sales-code" class="form-input" style="width: 100%;">
+              <option value="">Pilih Kode Sales...</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;">
+            <label class="form-label">Toko / Customer</label>
+            <div class="search-input-wrap store-search-wrap">
+              <input type="text" id="store-search-input" class="form-input" placeholder="Cari nama atau kode toko..." autocomplete="off" style="width: 100%;" />
+              <div id="store-suggestions" class="suggestions-dropdown hidden" style="max-height: 220px;"></div>
+            </div>
+            <!-- Hidden select for compatibility with form value retrieval -->
+            <select id="s1-customer" class="hidden">
+              <option value="">Pilih Toko...</option>
+            </select>
+            <!-- Selected store display card -->
+            <div id="selected-store-display" class="selected-product hidden" style="margin-top: 4px;">
+              <div style="flex: 1; min-width: 0;">
+                <div id="sel-store-name" style="font-weight: 600; font-size: 13.5px; color: var(--tg-text); word-break: break-word;">—</div>
+                <div id="sel-store-code" style="font-size: 11px; color: var(--tg-hint); margin-top: 2px;">—</div>
+              </div>
+              <button type="button" class="clear-btn" id="btn-clear-store" title="Ganti Toko" style="font-size: 16px; padding: 4px 8px;">✕</button>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:10px;">
+            <label class="form-label">Nomor Faktur (Opsional)</label>
+            <input type="text" id="s1-invoice" class="form-input" placeholder="Isi jika ada..." style="width: 100%;" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🏷️</span>
+          <h2>Tipe Retur</h2>
+        </div>
+        <div class="toggle-group" id="toggle-type">
+          <button class="toggle-btn active" data-value="TUNAI">💵 TUNAI</button>
+          <button class="toggle-btn" data-value="KREDIT">🏦 KREDIT</button>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <div></div>
+        <button class="btn btn-primary" id="btn-step1-next">Lanjut →</button>
+      </div>
+    </div>
+
+    <!-- ===== STEP 2: Detail Barang ===== -->
+    <div id="step-2" class="step-panel">
+      <!-- Return Header Summary (displayed when inspecting/editing existing return) -->
+      <div id="return-header-card" class="card return-header-card hidden" style="margin-bottom: 12px;">
+        <div class="card-header" style="justify-content: space-between; align-items: flex-start; padding-bottom: 8px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="card-icon" style="margin-right: 0;">📋</span>
+              <h2 id="rh-return-number" style="margin: 0; font-size: 15px;">—</h2>
+            </div>
+            <div id="rh-date" style="font-size: 11px; color: var(--tg-hint); margin-top: 2px;">—</div>
+          </div>
+          <div id="rh-status-badge" class="badge" style="font-size: 11px; padding: 4px 8px;">DRAFT</div>
+        </div>
+
+        <!-- Locked Banner (shown when approved/finished) -->
+        <div id="rh-locked-banner" class="locked-banner hidden">
+          <span style="font-size: 18px;">🔒</span>
+          <div>
+            <strong id="rh-locked-title">Retur telah disetujui oleh Supervisor Sales.</strong>
+            <div id="rh-locked-sub" style="font-size: 11px; opacity: 0.9;">Data telah dikunci dan tidak dapat diubah lagi oleh salesman ataupun supervisor.</div>
+          </div>
+        </div>
+
+        <!-- Driver Pickup mode banner -->
+        <div id="rh-driver-banner" class="driver-banner hidden">
+          <span style="font-size: 18px;">🚚</span>
+          <div>
+            <strong>Mode Penarikan Barang (Driver/Kenek)</strong>
+            <div style="font-size: 11px; opacity: 0.9;">Sesuaikan jumlah fisik barang yang ditarik dari toko, lalu klik Selesaikan Penarikan Barang.</div>
+          </div>
+        </div>
+
+        <!-- Admin Gudang mode banner -->
+        <div id="rh-gudang-banner" class="gudang-banner hidden">
+          <span style="font-size: 20px;">📦</span>
+          <div>
+            <strong>Penerimaan Fisik Retur (Admin Gudang)</strong>
+            <div style="font-size: 11px; opacity: 0.9;">Verifikasi fisik barang dari Driver. Anda dapat mengubah qty, menambah/mengurangi barang, lalu klik Simpan & Approve Retur.</div>
+          </div>
+        </div>
+
+        <div class="info-grid" style="margin-top: 8px; font-size: 12.5px;">
+          <div class="info-row" style="padding: 4px 0;">
+            <span class="info-label">Toko / Customer</span>
+            <span id="rh-customer" class="info-value font-semibold">—</span>
+          </div>
+          <div class="info-row" style="padding: 4px 0; align-items: center;">
+            <span class="info-label">No Faktur</span>
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 1;">
+              <span id="rh-invoice" class="info-value">—</span>
+              <button type="button" class="btn-invoice-edit" id="btn-edit-invoice" title="Edit No Faktur" style="display: none; background: rgba(91, 110, 245, 0.15); border: 1px solid rgba(91, 110, 245, 0.3); border-radius: 4px; color: var(--tg-accent); padding: 1px 6px; font-size: 11px; cursor: pointer;">✏️ Edit</button>
+            </div>
+          </div>
+          <div id="rh-invoice-edit-box" class="hidden" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255,255,255,0.04); border-radius: var(--radius-sm); border: 1px solid var(--tg-border); display: flex; gap: 6px; align-items: center;">
+            <input type="text" id="rh-invoice-input" class="form-input" placeholder="Ketik No Faktur..." style="padding: 4px 8px; font-size: 12px; height: 32px; flex: 1;" />
+            <button type="button" class="btn btn-primary btn-sm" id="btn-save-invoice" style="padding: 4px 10px; font-size: 11px; height: 32px; white-space: nowrap;">Simpan</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-invoice" style="padding: 4px 8px; font-size: 11px; height: 32px;">Batal</button>
+          </div>
+          <div class="info-row" style="padding: 4px 0;">
+            <span class="info-label">Salesperson</span>
+            <span id="rh-sales" class="info-value">—</span>
+          </div>
+          <div class="info-row" style="padding: 4px 0; align-items: center;">
+            <span class="info-label">Tipe Retur</span>
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 1;">
+              <span id="rh-type" class="info-value font-semibold">—</span>
+              <button type="button" class="btn-invoice-edit" id="btn-edit-type" title="Ubah Tipe Retur" style="display: none; background: rgba(91, 110, 245, 0.15); border: 1px solid rgba(91, 110, 245, 0.3); border-radius: 4px; color: var(--tg-accent); padding: 1px 6px; font-size: 11px; cursor: pointer;">✏️ Ubah</button>
+            </div>
+          </div>
+          <div id="rh-type-edit-box" class="hidden" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255,255,255,0.04); border-radius: var(--radius-sm); border: 1px solid var(--tg-border); display: flex; gap: 6px; align-items: center;">
+            <div style="display: flex; gap: 4px; flex: 1;">
+              <button type="button" class="btn btn-sm" id="btn-type-tunai" style="flex: 1; padding: 4px 8px; font-size: 11px;">TUNAI</button>
+              <button type="button" class="btn btn-sm" id="btn-type-kredit" style="flex: 1; padding: 4px 8px; font-size: 11px;">KREDIT</button>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-save-type" style="padding: 4px 10px; font-size: 11px; height: 32px; white-space: nowrap;">Simpan</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-type" style="padding: 4px 8px; font-size: 11px; height: 32px;">Batal</button>
+          </div>
+          <div id="rh-location-row" class="info-row hidden" style="padding: 4px 0;">
+            <span class="info-label">Lokasi Sales</span>
+            <span id="rh-location" class="info-value" style="font-size: 11px; max-width: 65%; text-align: right;">—</span>
+          </div>
+          <div id="rh-driver-location-row" class="info-row hidden" style="padding: 4px 0;">
+            <span class="info-label">Lokasi Driver</span>
+            <span id="rh-driver-location" class="info-value" style="font-size: 11px; max-width: 65%; text-align: right; color: var(--tg-accent);">—</span>
+          </div>
+          <div class="info-row" style="padding: 4px 0; align-items: center;">
+            <span class="info-label">Server Pusat</span>
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 1;">
+              <span id="rh-sync-status" class="info-value">—</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-sync-retur" title="Sinkronkan ke Server Pusat" style="padding: 2px 8px; font-size: 11px; height: 26px; border: 1px solid var(--tg-border); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">🔄 Sinkron</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Photo preview thumbnail for Sales if available -->
+        <div id="rh-photo-row" class="rh-photo-row hidden" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--tg-border); display: flex; align-items: center; gap: 10px;">
+          <img id="rh-photo-img" src="" alt="Foto Sales" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--tg-border); cursor: pointer;" onclick="previewHeaderPhoto()" />
+          <div style="font-size: 11px; color: var(--tg-hint);">
+            <span>📸 Foto Sales</span>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="previewHeaderPhoto()" style="display: block; padding: 0; font-size: 11px; color: var(--tg-accent); margin-top: 2px;">Lihat Foto Penuh</button>
+          </div>
+        </div>
+
+        <!-- Photo preview thumbnail for Driver if available -->
+        <div id="rh-driver-photo-row" class="rh-photo-row hidden" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--tg-border); display: flex; align-items: center; gap: 10px;">
+          <img id="rh-driver-photo-img" src="" alt="Foto Driver" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--tg-border); cursor: pointer;" onclick="previewDriverHeaderPhoto()" />
+          <div style="font-size: 11px; color: var(--tg-hint);">
+            <span style="color: #0077cc; font-weight: 500;">🚚 Foto Penarikan Driver</span>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="previewDriverHeaderPhoto()" style="display: block; padding: 0; font-size: 11px; color: var(--tg-accent); margin-top: 2px;">Lihat Foto Penuh</button>
+          </div>
+        </div>
+
+        <!-- Action bar for SPV / Driver / Sales inside header card -->
+        <div id="rh-actions-bar" class="rh-actions-bar" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--tg-border); display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-header-print-struk" style="display:none;">🖨️ Cetak Struk Retur</button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-header-driver-save" style="display:none; background: #0077cc; border-color: #0077cc;">🚚 Selesaikan Penarikan Barang</button>
+          <button type="button" class="btn btn-success btn-sm" id="btn-header-gudang-approve" style="display:none; background: #10b981; border-color: #10b981;">✅ Simpan & Approve Retur</button>
+          <button type="button" class="btn btn-success btn-sm" id="btn-header-spv-approve" style="display:none;">✅ Approve Retur</button>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-header-spv-reject" style="color:var(--red); border-color:var(--red); display:none;">❌ Tolak Retur</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📦</span>
+          <h2>Detail Barang Retur</h2>
+          <span id="item-count-badge" class="badge">0 item</span>
+          <button type="button" class="theme-toggle-btn" title="Ubah Tema"><span class="theme-icon">🌙</span></button>
+        </div>
+
+        <!-- Item list -->
+        <div id="item-list" class="item-list"></div>
+
+        <!-- Add Item Button -->
+        <button class="btn btn-outline btn-full" id="btn-add-item" style="margin-top: 14px;">
+          <span>＋ Tambah Barang</span>
+        </button>
+      </div>
+
+      <!-- Driver Pickup Evidence Card (Only shown for Driver when SPV_APPROVED) -->
+      <div id="driver-pickup-card" class="card hidden" style="border: 1.5px solid rgba(0, 119, 204, 0.4); background: rgba(0, 119, 204, 0.03);">
+        <div class="card-header">
+          <span class="card-icon">🚚</span>
+          <h2>Bukti Penarikan Barang (Driver)</h2>
+        </div>
+        <p style="font-size: 11.5px; color: var(--tg-hint); margin-bottom: 12px;">
+          Ambil foto fisik barang yang ditarik dari toko dan ambil lokasi GPS saat penarikan oleh driver/kenek.
+        </p>
+
+        <!-- Hidden file inputs for Driver -->
+        <input type="file" id="driver-camera-input" accept="image/*" capture="environment" style="position:fixed;top:-1000px;left:-1000px;opacity:0;pointer-events:none;" />
+        <input type="file" id="driver-gallery-input" accept="image/*" style="position:fixed;top:-1000px;left:-1000px;opacity:0;pointer-events:none;" />
+
+        <!-- Driver Photo Section -->
+        <div style="margin-bottom: 14px;">
+          <label class="form-label" style="font-weight: 600; font-size: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span>📸 Foto Barang Retur (Driver) <span style="color:var(--red,#ef4444); font-size:11px; font-weight:600;">*Wajib</span></span>
+            <span id="driver-photo-badge" class="badge" style="font-size: 10px; padding: 2px 6px; background: rgba(255,255,255,0.08);">Belum ada foto</span>
+          </label>
+
+          <!-- Action buttons when no photo -->
+          <div id="driver-photo-actions" style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-primary btn-full btn-sm" id="btn-driver-camera" style="flex: 1.3; padding: 9px; font-size: 12px; background: #0077cc; border-color: #0077cc;">
+              📷 Buka Kamera HP
+            </button>
+            <button type="button" class="btn btn-outline btn-full btn-sm" id="btn-driver-gallery" style="flex: 1; padding: 9px; font-size: 12px;">
+              🖼️ Galeri
+            </button>
+          </div>
+
+          <!-- Preview when photo uploaded -->
+          <div id="driver-photo-preview-wrap" class="hidden" style="margin-top: 8px; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.04); padding: 8px; border-radius: var(--radius-sm); border: 1px solid var(--tg-border);">
+            <img id="driver-photo-preview-img" src="" alt="Preview Driver" style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--tg-border); cursor: pointer;" />
+            <div style="flex: 1; font-size: 11px;">
+              <div id="driver-photo-upload-status" style="font-weight: 600; color: #55e67a; margin-bottom: 4px;">✅ Foto siap</div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-driver-retake" style="padding: 2px 6px; font-size: 10.5px; color: var(--tg-accent);">Foto Ulang</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-driver-remove-photo" style="padding: 2px 6px; font-size: 10.5px; color: var(--red);">Hapus</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Driver GPS Location Section -->
+        <div>
+          <label class="form-label" style="font-weight: 600; font-size: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span>📍 Lokasi Penarikan Driver <span style="color:var(--red,#ef4444); font-size:11px; font-weight:600;">*Wajib</span></span>
+            <span id="driver-location-badge" class="badge" style="font-size: 10px; padding: 2px 6px; background: rgba(255,255,255,0.08);">Belum ada lokasi</span>
+          </label>
+          <div id="driver-location-display" class="location-display" style="padding: 8px 10px; margin-bottom: 8px;">
+            <p class="location-hint" style="font-size: 11px; margin: 0;">Tekan tombol di bawah untuk mendeteksi GPS</p>
+          </div>
+          <button type="button" class="btn btn-outline btn-full btn-sm" id="btn-driver-get-location" style="padding: 8px; font-size: 12px;">
+            📍 Dapatkan Lokasi GPS Driver
+          </button>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-ghost" id="btn-step2-back">← Kembali</button>
+        <button class="btn btn-primary" id="btn-step2-next">✅ Simpan Detail</button>
+        <button class="btn btn-success" id="btn-step2-finish" style="margin-left:auto;">🔒 Selesai</button>
+      </div>
+    </div>
+
+    <!-- ===== STEP 3: Foto & Lokasi ===== -->
+    <div id="step-3" class="step-panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📸</span>
+          <h2>Foto Barang / Faktur <span style="color:var(--red,#ef4444); font-size:12px; font-weight:600; margin-left:4px;">*Wajib</span></h2>
+          <button type="button" class="theme-toggle-btn" title="Ubah Tema"><span class="theme-icon">🌙</span></button>
+        </div>
+        <!-- Hidden file inputs (off-screen, NOT hidden attribute so capture works on Android) -->
+        <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="position:fixed;top:-1000px;left:-1000px;opacity:0;pointer-events:none;" />
+        <input type="file" id="gallery-file-input" accept="image/*" style="position:fixed;top:-1000px;left:-1000px;opacity:0;pointer-events:none;" />
+
+        <!-- Initial action box (when no photo taken yet) -->
+        <div id="photo-action-box" class="photo-action-box">
+          <div class="photo-action-buttons">
+            <button type="button" class="btn btn-primary btn-full btn-camera-main" id="btn-open-camera">
+              <span class="camera-btn-icon">📷</span> Buka Kamera HP
+            </button>
+            <button type="button" class="btn btn-outline btn-full" id="btn-open-gallery">
+              <span class="gallery-btn-icon">🖼️</span> Pilih dari Galeri
+            </button>
+          </div>
+          <p class="photo-hint">Ambil foto barang retur atau faktur langsung lewat kamera HP atau pilih file yang sudah ada di galeri.</p>
+        </div>
+
+        <!-- Preview container (visible when photo selected/taken) -->
+        <div id="photo-preview-container" class="photo-preview-container hidden">
+          <div class="photo-preview-wrapper">
+            <img id="photo-preview" class="photo-preview" alt="Preview foto" />
+            <div id="photo-status" class="photo-status-badge">✅ Foto siap</div>
+          </div>
+          <div class="photo-preview-actions">
+            <button type="button" id="btn-retake-camera" class="btn btn-primary btn-sm">📷 Foto Ulang</button>
+            <button type="button" id="btn-retake-gallery" class="btn btn-outline btn-sm">🖼️ Galeri</button>
+            <button type="button" id="btn-remove-photo" class="btn btn-ghost btn-sm" style="color:var(--red);">🗑️ Hapus</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📍</span>
+          <h2>Lokasi Saat Ini <span style="color:var(--red,#ef4444); font-size:12px; font-weight:600; margin-left:4px;">*Wajib</span></h2>
+        </div>
+        <div id="location-display" class="location-display">
+          <p class="location-hint">Belum ada lokasi (Wajib)</p>
+        </div>
+        <button class="btn btn-outline btn-full" id="btn-get-location">
+          📍 Dapatkan Lokasi GPS
+        </button>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-ghost" id="btn-step3-back">← Kembali</button>
+        <button class="btn btn-primary" id="btn-step3-next">Lanjut →</button>
+      </div>
+    </div>
+
+    <!-- ===== STEP 4: Review & Submit ===== -->
+    <div id="step-4" class="step-panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📋</span>
+          <h2>Review Data Retur</h2>
+          <button type="button" class="theme-toggle-btn" title="Ubah Tema"><span class="theme-icon">🌙</span></button>
+        </div>
+
+        <div class="info-group">
+          <div class="info-row">
+            <span class="info-label">Customer</span>
+            <span id="r-customer" class="info-value">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Salesperson</span>
+            <span id="r-salesperson" class="info-value">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">No Faktur</span>
+            <span id="r-invoice" class="info-value">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Tipe</span>
+            <span id="r-type" class="info-value">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Lokasi</span>
+            <span id="r-location" class="info-value">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Foto</span>
+            <span id="r-photo" class="info-value">—</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <h3 class="section-title">Detail Barang</h3>
+        <div id="review-items" class="review-items"></div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-ghost" id="btn-step4-back">← Kembali</button>
+        <button class="btn btn-success" id="btn-submit">✅ Kirim Retur</button>
+      </div>
+    </div>
+
+    <!-- ===== SUCCESS SCREEN ===== -->
+    <div id="step-success" class="step-panel">
+      <div class="success-container">
+        <div class="success-icon">✅</div>
+        <h2>Retur Berhasil Dikirim!</h2>
+        <p id="success-return-number" class="return-number">—</p>
+        <p class="success-hint">Data retur telah dikirim dan menunggu pengecekan Supervisor Sales.</p>
+        <p class="success-hint small">Setelah disetujui oleh Supervisor Sales, struk retur dapat langsung dicetak.</p>
+        <button class="btn btn-primary" id="btn-close">Tutup</button>
+      </div>
+    </div>
+
+  </div><!-- end #screen-app -->
+
+  <!-- Item Form Modal -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal-item" class="modal-item">
+      <div class="modal-header">
+        <h3 id="modal-title">Tambah Barang</h3>
+        <button class="modal-close" id="btn-modal-close">✕</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Kode / Nama Barang</label>
+        <div class="search-input-wrap" style="display: flex; gap: 8px;">
+          <div style="flex: 1; position: relative;">
+            <input type="text" id="product-search-input" class="form-input" placeholder="Ketik kode atau nama..." autocomplete="off" style="width: 100%;" />
+            <div id="product-suggestions" class="suggestions-dropdown hidden"></div>
+          </div>
+          <button type="button" id="btn-scan-barcode" class="btn btn-outline" style="padding: 0 12px; display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;" title="Scan Barcode">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-line"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+          </button>
+        </div>
+        <div id="selected-product-display" class="selected-product hidden">
+          <span id="sel-product-name">—</span>
+          <button class="clear-btn" id="btn-clear-product">✕</button>
+        </div>
+      </div>
+
+      <div class="form-group" id="uom-counters-container" style="display:none">
+        <label class="form-label">Satuan & Jumlah</label>
+        <div id="uom-counters-list" class="uom-counters-list"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Alasan Retur</label>
+        <div id="alasan-presets" class="alasan-presets"></div>
+        <textarea id="alasan-input" class="form-input form-textarea" placeholder="Tulis alasan retur..." rows="2"></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btn-modal-cancel">Batal</button>
+        <button class="btn btn-primary" id="btn-modal-save">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner Modal -->
+  <div id="modal-scanner" class="modal-overlay hidden" style="z-index: 2000;">
+    <div class="modal-item" style="height: 80vh; max-height: 500px; display: flex; flex-direction: column; padding: 0;">
+      <div class="modal-header" style="padding: 15px;">
+        <h3 id="scanner-title">Scan Barcode / QR</h3>
+        <button class="modal-close" id="btn-scanner-close">✕</button>
+      </div>
+      <div style="flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+        <div id="reader" style="width: 100%; border: none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Camera Modal -->
+  <div id="modal-camera" class="modal-camera-fullscreen hidden" style="z-index: 2500;">
+    <div class="camera-container">
+      <div class="camera-top-bar">
+        <span class="camera-header-title">📸 Kamera Faktur / Barang</span>
+        <div class="camera-top-tools">
+          <button type="button" id="btn-camera-flash" class="camera-tool-btn hidden" title="Flashlight">🔦</button>
+          <button type="button" id="btn-camera-flip" class="camera-tool-btn" title="Ganti Kamera">🔄</button>
+          <button type="button" id="btn-camera-close" class="camera-tool-btn" title="Tutup">✕</button>
+        </div>
+      </div>
+
+      <div class="camera-viewfinder-area">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <div class="viewfinder-box">
+          <div class="vf-corner tl"></div>
+          <div class="vf-corner tr"></div>
+          <div class="vf-corner bl"></div>
+          <div class="vf-corner br"></div>
+          <div class="vf-guide-text">Posisikan faktur / barang di dalam kotak ini</div>
+        </div>
+        <div id="camera-flash-fx" class="camera-flash-fx"></div>
+      </div>
+
+      <div class="camera-bottom-bar">
+        <button type="button" id="btn-camera-cancel" class="camera-bottom-btn">Batal</button>
+        <button type="button" id="btn-camera-shutter" class="camera-shutter-btn" aria-label="Ambil Foto">
+          <span class="shutter-circle"></span>
+        </button>
+        <button type="button" id="btn-camera-to-gallery" class="camera-bottom-btn">🖼️ Galeri</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Thermal Receipt Modal -->
+  <div id="modal-receipt" class="modal-overlay hidden" style="z-index: 3000;">
+    <div class="modal-item receipt-modal-card" style="max-height: 90vh; display: flex; flex-direction: column; padding: 0;">
+      <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--tg-border);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">🧾</span>
+          <div>
+            <h3 style="margin: 0; font-size: 15px;">Surat Penarikan Barang</h3>
+            <span id="receipt-modal-sub" style="font-size: 11px; color: var(--tg-hint);">Siap dicetak</span>
+          </div>
+        </div>
+        <button class="modal-close" id="btn-receipt-close">✕</button>
+      </div>
+
+      <!-- Print type selector -->
+      <div class="receipt-type-selector" style="display: flex; gap: 6px; padding: 10px 16px; background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--tg-border);">
+        <button type="button" class="btn-receipt-filter active" data-type="ALL">Semua Barang</button>
+        <button type="button" class="btn-receipt-filter" data-type="GOOD">Good Stock [G]</button>
+        <button type="button" class="btn-receipt-filter" data-type="BAD">Bad Stock [B]</button>
+      </div>
+
+      <!-- Thermal paper container -->
+      <div class="receipt-paper-wrap">
+        <div id="printable-receipt" class="receipt-paper">
+          <pre id="receipt-text" class="receipt-text-preview">Memuat struk...</pre>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 14px 18px; border-top: 1px solid var(--tg-border); flex-direction: column; gap: 8px;">
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button type="button" class="btn btn-primary" id="btn-receipt-direct-print" style="flex: 1; font-size: 13px;">
+            🖨️ Cetak / Print Struk
+          </button>
+          <button type="button" class="btn btn-outline" id="btn-receipt-office-print" style="flex: 1; font-size: 13px;" title="Kirim ke Printer Kantor">
+            📡 Printer Kantor
+          </button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-full" id="btn-receipt-cancel" style="padding: 6px; font-size: 13px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=27"></script>
+</body>
+</html>
