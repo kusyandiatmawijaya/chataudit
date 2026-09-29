@@ -11,6 +11,9 @@
     "build": "npm install --prefix frontend && npm run build --prefix frontend && node scripts/copy-dist.js",
     "start": "npm start --prefix backend"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
